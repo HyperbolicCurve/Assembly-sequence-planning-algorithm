@@ -1,11 +1,11 @@
 % 装配序列规划问题的粒子群算法（PSO）
 
 % 输入参数
-N = 500; % 种群数量
+N = 200; % 种群数量
 maxIter = 200; % 最大迭代次数
 w = 0.9; % 惯性因子
-c1 = 2; % 个体学习因子
-c2 = 2; % 社会学习因子
+c1 = 0.6; % 个体学习因子
+c2 = 0.6; % 社会学习因子
 vMax = 4; % 最大速度限制
 minError = 1e-6; % 算法终止的最小误差
 
@@ -151,68 +151,7 @@ xlabel('迭代次数');
 ylabel('目标函数值');
 title('目标函数值与迭代次数的关系');
 
-% 适应度函数
-function O = fitness_function(Z_h, S, T, C, D, A_I_X, A_I_Y, A_I_Z)
-    n = length(Z_h);
-    N_g = 0;
-    N_t = 0;
-    N_d = 0;
-    N_s = 0;
 
-    % 计算几何干涉次数 N_g
-    for i = 1:n-1
-        switch D(i)
-            case "+X"
-                A_I = A_I_X;
-            case "-X"
-                A_I = A_I_X';
-            case "+Y"
-                A_I = A_I_Y;
-            case "-Y"
-                A_I = A_I_Y';
-            case "+Z"
-                A_I = A_I_Z;
-            case "-Z"
-                A_I = A_I_Z';
-            otherwise
-                error('未知的装配方向');
-        end
-
-        if A_I(Z_h(i), Z_h(i+1)) == 1
-            N_g = N_g + 1;
-        end
-    end
-
-    % 计算工具改变次数 N_t
-    for i = 1:n-1
-        if T(Z_h(i)) ~= T(Z_h(i+1))
-            N_t = N_t + 1;
-        end
-    end
-
-    % 计算方向改变次数 N_d
-    for i = 1:n-1
-        if D(i) ~= D(i+1)
-            N_d = N_d + 1;
-        end
-    end
-
-    % 计算不稳定操作次数 N_s
-    for i = 2:n
-        if C(Z_h(i), Z_h(i-1)) ~= 1 && S(Z_h(i), Z_h(i-1)) ~= 1
-            N_s = N_s + 1;
-        end
-    end
-
-    omega_1 = 0.3; % 权重因子
-    omega_2 = 0.3; % 权重因子
-    omega_3 = 0.4; % 权重因子
-    if N_g > 0
-        O = inf; % 如果几何干涉次数大于0，适应度设为无穷大
-    else
-        O = omega_1 * N_t + omega_2 * N_d + omega_3 * N_s;
-    end
-end
 
 % 计算指标的函数
 function [N_g, N_t, N_d, N_s] = calculate_indicators(Z_h, S, T, C, D, A_I_X, A_I_Y, A_I_Z)

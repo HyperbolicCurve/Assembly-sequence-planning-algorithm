@@ -1,8 +1,6 @@
-% 优化装配零件的顺序和方向的灰狼优化算法（GWO）结合Lévy飞行
-
 % 输入参数
-N = 500; % 种群数量
-maxIter = 200; % 最大迭代次数
+N = 200; % 种群数量
+maxIter = 300; % 最大迭代次数
 aMax = 1.5; % a 初始值
 minError = 1e-2; % 最小误差
 
@@ -19,12 +17,14 @@ C = readmatrix('连接矩阵.xlsx');
 
 % 读取干涉矩阵 A_I
 A_I_X = readmatrix('干涉矩阵-X.xlsx');
+A_I_Y = readmatrix('干涉矩阵-Y.xlsx');
+A_I_Z = readmatrix('干涉矩阵-Z.xlsx');
 
 % 假设装配序列有21个零件
 m = 21;
 
 % 装配方向矩阵 D
-directions = ["X", "-X"];
+directions = ["+X", "-X"];
 
 % 初始化狼群位置
 positions = zeros(N, m);
@@ -50,7 +50,7 @@ delta_score = inf;
 
 % 计算初始适应值
 for i = 1:N
-    fitness = fitness_function(positions(i, :), directions(directions_idx(i, :)), S, T, C, A_I_X);
+    fitness = fitness_function(positions(i, :), S, T, C, directions(directions_idx(i, :)), A_I_X, A_I_Y, A_I_Z);
     if fitness < alpha_score
         alpha_score = fitness;
         alpha_pos = positions(i, :);
@@ -70,7 +70,8 @@ end
 best_fitness_values = zeros(maxIter, 1);
 for iter = 1:maxIter
     a = aMax - iter * (aMax / maxIter); % 线性减少 a
-    
+    % 动态调整步长
+    step_size = 1 / (1 + exp(-10 * (iter / maxIter - 0.5))); 
     for i = 1:N
         % 创建一个临时位置数组来存储更新后的值
         temp_positions = positions(i, :);
@@ -103,7 +104,7 @@ for iter = 1:maxIter
             D_delta = abs(C3 * delta_pos(j) - positions(i, j));
             X3 = delta_pos(j) - A3 * D_delta;
             
-            temp_positions(j) = round((X1 + X2 + X3) / 3); % 四舍五入以获得整数位置
+            temp_positions(j) = round((X1 + X2 + X3) / 3 * step_size); % 乘以步长进行调整
         end
         
         % 确保位置在有效范围内
@@ -113,7 +114,7 @@ for iter = 1:maxIter
         temp_positions = fix_positions(temp_positions);
         
         % 使用Lévy飞行动作生成新位置
-        [temp_positions, temp_dirs] = levy_flight(temp_positions, temp_dirs, directions, S, T, C, A_I_X);
+        [temp_positions, temp_dirs] = levy_flight(temp_positions, temp_dirs, directions, S, T, C, A_I_X, A_I_Y, A_I_Z);
         
         % 确保9号零件为第一个零件，并且方向为-X
         temp_positions = [9, setdiff(temp_positions, 9, 'stable')];
@@ -124,7 +125,7 @@ for iter = 1:maxIter
         directions_idx(i, :) = temp_dirs;
         
         % 计算适应值
-        fitness = fitness_function(positions(i, :), directions(directions_idx(i, :)), S, T, C, A_I_X);
+        fitness = fitness_function(positions(i, :), S, T, C, directions(directions_idx(i, :)), A_I_X, A_I_Y, A_I_Z);
         
         % 更新 Alpha, Beta, Delta
         if fitness < alpha_score
@@ -160,7 +161,7 @@ best_fitness = alpha_score;
 best_directions = max(min(best_directions, length(directions)), 1);
 
 % 计算最优解的具体指标
-[N_g, N_t, N_d, N_s] = calculate_indicators(best_solution, directions(best_directions), S, T, C, A_I_X);
+[N_g, N_t, N_d, N_s] = calculate_indicators(best_solution, S, T, C, directions(best_directions), A_I_X, A_I_Y, A_I_Z);
 
 fprintf('最优装配序列: ');
 disp(best_solution);
@@ -179,7 +180,7 @@ ylabel('目标函数值');
 title('目标函数值与迭代次数的关系');
 
 %%% Lévy飞行相关操作 %%%
-function [new_position, new_directions] = levy_flight(position, directions, all_directions, S, T, C, A_I_X)
+function [new_position, new_directions] = levy_flight(position, directions, all_directions, S, T, C, A_I_X, A_I_Y, A_I_Z)
     % 选择随机一个Global-Swap算子
     if rand < 0.33
         new_position = global_swap(position);
@@ -206,8 +207,8 @@ function [new_position, new_directions] = levy_flight(position, directions, all_
     end
 
     % 如果新位置的目标函数值更好，则接受新位置
-    if fitness_function(new_position, all_directions(new_directions), S, T, C, A_I_X) < ...
-       fitness_function(position, all_directions(directions), S, T, C, A_I_X)
+    if fitness_function(new_position, S, T, C, all_directions(new_directions), A_I_X, A_I_Y, A_I_Z) < ...
+       fitness_function(position, S, T, C, all_directions(new_directions), A_I_X, A_I_Y, A_I_Z)
         position = new_position;
         directions = new_directions;
     end
@@ -237,109 +238,7 @@ function new_position = two_opt(position)
     new_position(idx(1):idx(2)) = position(idx(2):-1:idx(1));
 end
 
-% 适应度函数
-function O = fitness_function(Z_h, D, S, T, C, A_I_X)
-    n = length(Z_h);
-    N_g = 0;
-    N_t = 0;
-    N_d = 0;
-    N_s = 0;
 
-    % 计算几何干涉次数 N_g
-    for i = 1:n-1
-        switch D(i)  % 使用装配序列中的索引来访问装配方向
-            case 'X'
-                A_I = A_I_X;
-            case '-X'
-                A_I = A_I_X';
-            otherwise
-                error('未知的装配方向');
-        end
-
-        if A_I(Z_h(i), Z_h(i+1)) == 1
-            N_g = N_g + 1;
-        end
-    end
-
-    % 计算工具改变次数 N_t
-    for i = 1:n-1
-        if T(Z_h(i)) ~= T(Z_h(i+1))
-            N_t = N_t + 1;
-        end
-    end
-
-    % 计算方向改变次数 N_d
-    for i = 1:n-1
-        if D(i) ~= D(i+1)
-            N_d = N_d + 1;
-        end
-    end
-
-    % 计算不稳定操作次数 N_s
-    for i = 2:n
-        if C(Z_h(i), Z_h(i-1)) ~= 1 && S(Z_h(i), Z_h(i-1)) ~= 1
-            N_s = N_s + 1;
-        end
-    end
-
-    % 设定权重系数
-    omega_1 = 0.3;
-    omega_2 = 0.3;
-    omega_3 = 0.3;
-
-    % 计算评价函数 E
-    if N_g > 0
-        O = inf; % 存在几何干涉时，适应度设为无穷大
-    else
-        O = omega_1 * N_t + omega_2 * N_d + omega_3 * N_s;
-    end
-end
-
-% 计算指标的函数
-function [N_g, N_t, N_d, N_s] = calculate_indicators(Z_h, D, S, T, C, A_I_X)
-    n = length(Z_h);
-    N_g = 0;
-    N_t = 0;
-    N_d = 0;
-    N_s = 0;
-
-    % 计算几何干涉次数 N_g
-    for i = 1:n-1
-        switch D(i)  % 确保装配方向的索引是合法的
-            case 'X'
-                A_I = A_I_X;
-            case '-X'
-                A_I = A_I_X';
-            otherwise
-                error('未知的装配方向');
-        end
-
-        if A_I(Z_h(i), Z_h(i+1)) == 1
-            N_g = N_g + 1;
-        end
-    end
-
-    % 计算工具改变次数 N_t
-    for i = 1:n-1
-        if T(Z_h(i)) ~= T(Z_h(i+1))
-            N_t = N_t + 1;
-        end
-    end
-
-    % 计算方向改变次数 N_d
-    for i = 1:n-1
-        if D(i) ~= D(i+1)
-            N_d = N_d + 1;
-        end
-    end
-
-    % 计算不稳定操作次数 N_s
-    for i = 2:n
-        if C(Z_h(i), Z_h(i-1)) ~= 1 && S(Z_h(i), Z_h(i-1)) ~= 1
-            N_s = N_s + 1;
-        end
-    end
-end
 
 % 修复位置的函数，确保每个零件只出现一次
 function fixedPosition = fix_positions(position)

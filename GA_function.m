@@ -5,17 +5,23 @@ function [bestSequence, bestDirections, bestValues] = GA_function(populationSize
     % 假设装配序列有21个零件
     m = 21;
 
-    % 初始化种群
-    population = repmat(struct('sequence', [], 'directions', []), populationSize, 1);
-    for i = 1:populationSize
-        population(i).sequence = randperm(m);
-        population(i).directions = directions(randi(length(directions), 1, m));
-    end
-
-    % 计算初始适应值
-    fitnessValues = zeros(populationSize, 1);
-    for i = 1:populationSize
-        fitnessValues(i) = fitness_function(population(i).sequence, S, T, C, population(i).directions, A_I_X, A_I_Y, A_I_Z);
+    valid_population_found = false;
+    while ~valid_population_found
+        % 初始化种群
+        population = repmat(struct('sequence', [], 'directions', []), populationSize, 1);
+        for i = 1:populationSize
+            population(i).sequence = randperm(m);
+            population(i).directions = directions(randi(length(directions), 1, m));
+        end
+    
+        % 计算初始适应值
+        fitnessValues = zeros(populationSize, 1);
+        for i = 1:populationSize
+            fitnessValues(i) = fitness_function(population(i).sequence, S, T, C, population(i).directions, A_I_X, A_I_Y, A_I_Z);
+            if fitnessValues(i) ~= inf
+                valid_population_found = true;
+            end
+        end
     end
 
     % 初始化最佳适应值
@@ -141,60 +147,6 @@ function O = fitness_function(Z_h, S, T, C, D, A_I_X, A_I_Y, A_I_Z)
         O = inf; % 存在几何干涉时，适应度设为无穷大
     else
         O = omega_1 * N_t + omega_2 * N_d + omega_3 * N_s;
-    end
-end
-
-% 计算指标的函数
-function [N_g, N_t, N_d, N_s] = calculate_indicators(Z_h, S, T, C, D, A_I_X, A_I_Y, A_I_Z)
-    n = length(Z_h);
-    N_g = 0;
-    N_t = 0;
-    N_d = 0;
-    N_s = 0;
-
-    % 计算几何干涉次数 N_g
-    for i = 1:n-1
-        switch D(i)
-            case '+X'
-                A_I = A_I_X;
-            case '-X'
-                A_I = A_I_X';
-            case '+Y'
-                A_I = A_I_Y;
-            case '-Y'
-                A_I = A_I_Y';
-            case '+Z'
-                A_I = A_I_Z;
-            case '-Z'
-                A_I = A_I_Z';
-            otherwise
-                error('未知的装配方向');
-        end
-
-        if A_I(Z_h(i), Z_h(i+1)) == 1
-            N_g = N_g + 1;
-        end
-    end
-
-    % 计算工具改变次数 N_t
-    for i = 1:n-1
-        if T(Z_h(i)) ~= T(Z_h(i+1))
-            N_t = N_t + 1;
-        end
-    end
-
-    % 计算方向改变次数 N_d
-    for i = 1:n-1
-        if D(i) ~= D(i+1)
-            N_d = N_d + 1;
-        end
-    end
-
-    % 计算不稳定操作次数 N_s
-    for i = 2:n
-        if C(Z_h(i), Z_h(i-1)) ~= 1 && S(Z_h(i), Z_h(i-1)) ~= 1
-            N_s = N_s + 1;
-        end
     end
 end
 

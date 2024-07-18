@@ -1,57 +1,70 @@
 function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S, T, C, A_I_X, A_I_Y, A_I_Z, N, maxIter, aMax, minError)
     % 输入参数
     m = 21; % 假设装配序列有21个零件
-    directions = ["X", "-X", "Y", "-Y", "Z", "-Z"];
-
-    % 初始化狼群位置
-    positions = zeros(N, m);
-    directions_idx = randi(length(directions), N, m); % 装配方向索引
-
-    for i = 1:N
-        positions(i, :) = randperm(m);
-        % 确保9号零件为第一个零件，并且方向为-X
-        positions(i, :) = [9, setdiff(positions(i, :), 9, 'stable')];
-        directions_idx(i, :) = [2, randi(length(directions), 1, m-1)];
-    end
-
+    % 装配方向矩阵 D
+    directions_full = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"];
+    directions_restricted = ["+X", "-X"];
+    directions = directions_full;
+    
     % 初始化 Alpha, Beta, Delta 的位置及其适应度
     alpha_pos = zeros(1, m);
     alpha_dir = zeros(1, m);
     alpha_score = inf;
     beta_pos = zeros(1, m);
-    beta_dir = zeros(1, m);
     beta_score = inf;
     delta_pos = zeros(1, m);
-    delta_dir = zeros(1, m);
     delta_score = inf;
 
-    % 计算初始适应值
-    for i = 1:N
-        fitness = fitness_function(positions(i, :), directions(directions_idx(i, :)), S, T, C, A_I_X, A_I_Y, A_I_Z);
-        if fitness < alpha_score
-            alpha_score = fitness;
-            alpha_pos = positions(i, :);
-            alpha_dir = directions_idx(i, :);
-        elseif fitness < beta_score
-            beta_score = fitness;
-            beta_pos = positions(i, :);
-            beta_dir = directions_idx(i, :);
-        elseif fitness < delta_score
-            delta_score = fitness;
-            delta_pos = positions(i, :);
-            delta_dir = directions_idx(i, :);
+    % 确保初始化的种群有一个非无穷大的适应度
+    valid_population_found = false;
+    while ~valid_population_found
+        positions = zeros(N, m);
+        directions_idx = randi(length(directions), N, m); % 装配方向索引
+    
+        for i = 1:N
+            positions(i, :) = randperm(m);
+            % 确保9号零件为第一个零件，并且方向为-X
+            positions(i, :) = [9, setdiff(positions(i, :), 9, 'stable')];
+            directions_idx(i, :) = [2, randi(length(directions), 1, m-1)];
+        end
+    
+        % 计算初始适应值并检查是否有有效的适应度
+        for i = 1:N
+            fitness = fitness_function(positions(i, :), S, T, C, ...
+                                       directions(directions_idx(i, :)), A_I_X, A_I_Y, A_I_Z);
+            if fitness < alpha_score
+                alpha_pos = positions(i, :);
+                alpha_dir = directions_idx(i, :);
+                alpha_score = fitness;
+            elseif fitness < beta_score
+                beta_pos = positions(i, :);
+                beta_score = fitness;
+            elseif fitness < delta_score
+                delta_pos = positions(i, :);
+                delta_score = fitness;
+            end
+            % 如果Alpha的适应度已经有效，则不需要更差的解，可以停止搜索
+            if alpha_score ~= inf
+                valid_population_found = true;
+            end
         end
     end
-
+    
     % 迭代优化
     best_fitness_values = zeros(maxIter, 1);
     for iter = 1:maxIter
-        a = aMax - iter * (aMax / maxIter); % 线性减少 a
-
+        % 动态调整可选择的方向
         if iter > maxIter / 2
-            directions = ["X", "-X"]; % 后半段限制方向选项
+            directions = directions_restricted;
+            % 修正当前方向索引，确保不会超过新的方向集范围
+            directions_idx(directions_idx > length(directions_restricted)) = randi(length(directions_restricted), size(directions_idx(directions_idx > length(directions_restricted))));
+        else
+            directions = directions_full;
         end
         
+        a = aMax - iter * (aMax / maxIter); % 线性减少 a
+        % 动态调整步长
+        step_size = 1 / (1 + exp(-10 * (iter / maxIter - 0.5))); 
         for i = 1:N
             % 创建一个临时位置数组来存储更新后的值
             temp_positions = positions(i, :);
@@ -84,7 +97,7 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
                 D_delta = abs(C3 * delta_pos(j) - positions(i, j));
                 X3 = delta_pos(j) - A3 * D_delta;
                 
-                temp_positions(j) = round((X1 + X2 + X3) / 3); % 四舍五入以获得整数位置
+                temp_positions(j) = round((X1 + X2 + X3) / 3 * step_size); % 乘以步长进行调整
             end
             
             % 确保位置在有效范围内
@@ -105,7 +118,7 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
             directions_idx(i, :) = temp_dirs;
             
             % 计算适应值
-            fitness = fitness_function(positions(i, :), directions(directions_idx(i, :)), S, T, C, A_I_X, A_I_Y, A_I_Z);
+            fitness = fitness_function(positions(i, :), S, T, C, directions(directions_idx(i, :)), A_I_X, A_I_Y, A_I_Z);
             
             % 更新 Alpha, Beta, Delta
             if fitness < alpha_score
@@ -115,11 +128,9 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
             elseif fitness < beta_score
                 beta_score = fitness;
                 beta_pos = positions(i, :);
-                beta_dir = directions_idx(i, :);
             elseif fitness < delta_score
                 delta_score = fitness;
                 delta_pos = positions(i, :);
-                delta_dir = directions_idx(i, :);
             end
         end
         
@@ -142,8 +153,8 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
     best_directions = max(min(best_directions, length(directions)), 1);
 
     % 计算最优解的具体指标
-    [N_g, N_t, N_d, N_s] = calculate_indicators(best_solution, directions(best_directions), S, T, C, A_I_X, A_I_Y, A_I_Z);
-    
+    [~, N_t, N_d, N_s] = calculate_indicators(best_solution, S, T, C, directions(best_directions), A_I_X, A_I_Y, A_I_Z);
+
     fprintf('最优装配序列: ');
     disp(best_solution);
     fprintf('最优适应度: %f\n', best_fitness);
@@ -152,10 +163,9 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
     fprintf('装配过程中不稳定操作的次数: %d\n', N_s);
     fprintf('零件的安装方向: ');
     disp(directions(best_directions));
-    
 end
 
-%%% 辅助函数 %%%
+%%% Lévy飞行相关操作 %%%
 function [new_position, new_directions] = levy_flight(position, directions, all_directions, S, T, C, A_I_X, A_I_Y, A_I_Z)
     % 选择随机一个Global-Swap算子
     if rand < 0.33
@@ -182,12 +192,9 @@ function [new_position, new_directions] = levy_flight(position, directions, all_
         end
     end
 
-    % 确保new_directions中的索引在有效范围内
-    new_directions = max(min(new_directions, length(all_directions)), 1);
-
     % 如果新位置的目标函数值更好，则接受新位置
-    if fitness_function(new_position, all_directions(new_directions), S, T, C, A_I_X, A_I_Y, A_I_Z) < ...
-       fitness_function(position, all_directions(directions), S, T, C, A_I_X, A_I_Y, A_I_Z)
+    if fitness_function(new_position, S, T, C, all_directions(new_directions), A_I_X, A_I_Y, A_I_Z) < ...
+       fitness_function(position, S, T, C, all_directions(directions), A_I_X, A_I_Y, A_I_Z)
         position = new_position;
         directions = new_directions;
     end
@@ -215,126 +222,6 @@ function new_position = two_opt(position)
     idx = sort(randperm(length(position), 2));
     new_position = position;
     new_position(idx(1):idx(2)) = position(idx(2):-1:idx(1));
-end
-
-% 适应度函数
-function O = fitness_function(Z_h, D, S, T, C, A_I_X, A_I_Y, A_I_Z)
-    n = length(Z_h);
-    N_g = 0;
-    N_t = 0;
-    N_d = 0;
-    N_s = 0;
-
-    % 计算几何干涉次数 N_g
-    for i = 1:n-1
-        switch D(i)  % 使用装配序列中的方向
-            case 'X'
-                A_I = A_I_X;
-            case '-X'
-                A_I = A_I_X';
-            case 'Y'
-                A_I = A_I_Y;
-            case '-Y'
-                A_I = A_I_Y';
-            case 'Z'
-                A_I = A_I_Z;
-            case '-Z'
-                A_I = A_I_Z';
-            otherwise
-                error('未知的装配方向');
-        end
-
-        if A_I(Z_h(i), Z_h(i+1)) == 1
-            N_g = N_g + 1;
-        end
-    end
-
-    % 计算工具改变次数 N_t
-    for i = 1:n-1
-        if T(Z_h(i)) ~= T(Z_h(i+1))
-            N_t = N_t + 1;
-        end
-    end
-
-    % 计算方向改变次数 N_d
-    for i = 1:n-1
-        if D(i) ~= D(i+1)
-            N_d = N_d + 1;
-        end
-    end
-
-    % 计算不稳定操作次数 N_s
-    for i = 2:n
-        if C(Z_h(i), Z_h(i-1)) ~= 1 && S(Z_h(i), Z_h(i-1)) ~= 1
-            N_s = N_s + 1;
-        end
-    end
-
-    % 设定权重系数
-    omega_1 = 0.3;
-    omega_2 = 0.3;
-    omega_3 = 0.3;
-
-    % 计算评价函数 E
-    if N_g > 0
-        O = inf; % 存在几何干涉时，适应度设为无穷大
-    else
-        O = omega_1 * N_t + omega_2 * N_d + omega_3 * N_s;
-    end
-end
-
-% 计算指标的函数
-function [N_g, N_t, N_d, N_s] = calculate_indicators(Z_h, D, S, T, C, A_I_X, A_I_Y, A_I_Z)
-    n = length(Z_h);
-    N_g = 0;
-    N_t = 0;
-    N_d = 0;
-    N_s = 0;
-
-    % 计算几何干涉次数 N_g
-    for i = 1:n-1
-        switch D(i)  % 使用装配序列中的索引来访问装配方向
-            case 'X'
-                A_I = A_I_X;
-            case '-X'
-                A_I = A_I_X';
-            case 'Y'
-                A_I = A_I_Y;
-            case '-Y'
-                A_I = A_I_Y';
-            case 'Z'
-                A_I = A_I_Z;
-            case '-Z'
-                A_I = A_I_Z';
-            otherwise
-                error('未知的装配方向');
-        end
-
-        if A_I(Z_h(i), Z_h(i+1)) == 1
-            N_g = N_g + 1;
-        end
-    end
-
-    % 计算工具改变次数 N_t
-    for i = 1:n-1
-        if T(Z_h(i)) ~= T(Z_h(i+1))
-            N_t = N_t + 1;
-        end
-    end
-
-    % 计算方向改变次数 N_d
-    for i = 1:n-1
-        if D(i) ~= D(i+1)
-            N_d = N_d + 1;
-        end
-    end
-
-    % 计算不稳定操作次数 N_s
-    for i = 2:n
-        if C(Z_h(i), Z_h(i-1)) ~= 1 && S(Z_h(i-1), Z_h(i)) ~= 1
-            N_s = N_s + 1;
-        end
-    end
 end
 
 % 修复位置的函数，确保每个零件只出现一次
