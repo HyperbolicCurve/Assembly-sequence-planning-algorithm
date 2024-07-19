@@ -5,7 +5,6 @@ function [best_solution, best_directions, fitness_iter] = GWO_function(N, maxIte
     m = 21;
     % 装配方向矩阵 D
     directions_full = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"];
-    directions_restricted = ["+X", "-X"];
     directions = directions_full;
     
     % 初始化 Alpha, Beta, Delta 的位置及其适应度
@@ -45,31 +44,31 @@ function [best_solution, best_directions, fitness_iter] = GWO_function(N, maxIte
                 delta_pos = positions(i, :);
                 delta_score = fitness;
             end
-            % 如果Alpha的适应度已经有效，则不需要更差的解，可以停止搜索
-            if alpha_score ~= inf
-                valid_population_found = true;
-            end
+        end
+        % 如果Alpha的适应度已经有效，则不需要更差的解，可以停止搜索
+        if alpha_score ~= inf
+            valid_population_found = true;
         end
     end
     
     % 迭代优化
     best_fitness_values = zeros(maxIter, 1);
     for iter = 1:maxIter
-        % 动态调整可选择的方向
-        if iter > maxIter / 2
-            directions = directions_restricted;
+        if iter > maxIter / 3
+            directions = directions(1:3);
             % 修正当前方向索引，确保不会超过新的方向集范围
-            directions_idx(directions_idx > length(directions_restricted)) = randi(length(directions_restricted), size(directions_idx(directions_idx > length(directions_restricted))));
+            directions_idx(directions_idx > length(directions)) = randi(length(directions), size(directions_idx(directions_idx > length(directions))));
         else
             directions = directions_full;
         end
         
         a = aMax - iter * (aMax / maxIter); % 线性减少 a
-        step_size = 1 / (1 + exp(-10 * (iter / maxIter - 0.5))); % 动态调整步长
+        % step_size = 1 / (1 + exp(-10 * (iter / maxIter - 0.5))); % 动态调整步长
         for i = 1:N
             % 创建一个临时位置和方向数组来存储更新后的值
             temp_positions = positions(i, :);
-            temp_directions = directions_idx(i, :);
+            temp_directions = directions_idx(i, :);  
+            
             for j = 2:m  % 从第二个零件开始更新位置和方向
                 r1 = rand();
                 r2 = rand();
@@ -98,7 +97,8 @@ function [best_solution, best_directions, fitness_iter] = GWO_function(N, maxIte
                 D_delta = abs(C3 * delta_pos(j) - positions(i, j));
                 X3 = delta_pos(j) - A3 * D_delta;
                 
-                temp_positions(j) = round((X1 + X2 + X3) / 3 * step_size); % 乘以步长进行调整
+                temp_positions(j) = round((X1 + X2 + X3) / 3 );
+                
                 % 随机更新方向
                 temp_directions(j) = randi(length(directions));
             end
@@ -128,6 +128,8 @@ function [best_solution, best_directions, fitness_iter] = GWO_function(N, maxIte
                 delta_score = fitness;
                 delta_pos = positions(i, :);
             end
+            
+            
         end
         
         % 保存当前迭代的最佳适应度值
@@ -146,8 +148,9 @@ function [best_solution, best_directions, fitness_iter] = GWO_function(N, maxIte
     best_fitness = alpha_score;
     fitness_iter = best_fitness_values;
 
+
     % 计算最优解的具体指标
-    [N_g, N_t, N_d, N_s] = calculate_indicators(best_solution, S, T, C, directions(best_directions), A_I_X, A_I_Y, A_I_Z);
+    [~, N_t, N_d, N_s] = calculate_indicators(best_solution, S, T, C, directions(best_directions), A_I_X, A_I_Y, A_I_Z);
     
     fprintf('最优装配序列: ');
     disp(best_solution);

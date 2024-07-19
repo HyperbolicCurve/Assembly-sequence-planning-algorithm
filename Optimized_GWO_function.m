@@ -3,7 +3,6 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
     m = 21; % 假设装配序列有21个零件
     % 装配方向矩阵 D
     directions_full = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"];
-    directions_restricted = ["+X", "-X"];
     directions = directions_full;
     
     % 初始化 Alpha, Beta, Delta 的位置及其适应度
@@ -43,10 +42,10 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
                 delta_pos = positions(i, :);
                 delta_score = fitness;
             end
-            % 如果Alpha的适应度已经有效，则不需要更差的解，可以停止搜索
-            if alpha_score ~= inf
-                valid_population_found = true;
-            end
+        end
+        % 如果Alpha的适应度已经有效，则不需要更差的解，可以停止搜索
+        if alpha_score ~= inf
+            valid_population_found = true;
         end
     end
     
@@ -55,16 +54,23 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
     for iter = 1:maxIter
         % 动态调整可选择的方向
         if iter > maxIter / 2
-            directions = directions_restricted;
+            directions = directions(1:2);
             % 修正当前方向索引，确保不会超过新的方向集范围
-            directions_idx(directions_idx > length(directions_restricted)) = randi(length(directions_restricted), size(directions_idx(directions_idx > length(directions_restricted))));
+            directions_idx(directions_idx > length(directions)) = randi(length(directions), size(directions_idx(directions_idx > length(directions))));
+        elseif iter > maxIter / 4
+            directions = directions(1:4);
+            % 修正当前方向索引，确保不会超过新的方向集范围
+            directions_idx(directions_idx > length(directions)) = randi(length(directions), size(directions_idx(directions_idx > length(directions))));
         else
             directions = directions_full;
         end
-        
         a = aMax - iter * (aMax / maxIter); % 线性减少 a
-        % 动态调整步长
-        step_size = 1 / (1 + exp(-10 * (iter / maxIter - 0.5))); 
+        step_size = 1 / (1 + exp(-10 * (iter / maxIter - 0.5))); % 动态调整步长
+        total_fitness = alpha_score + beta_score + delta_score;
+        alpha_weight = alpha_score / total_fitness;
+        beta_weight = beta_score / total_fitness;
+        delta_weight = delta_score / total_fitness;
+
         for i = 1:N
             % 创建一个临时位置数组来存储更新后的值
             temp_positions = positions(i, :);
@@ -96,8 +102,9 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
                 
                 D_delta = abs(C3 * delta_pos(j) - positions(i, j));
                 X3 = delta_pos(j) - A3 * D_delta;
-                
-                temp_positions(j) = round((X1 + X2 + X3) / 3 * step_size); % 乘以步长进行调整
+                % 动态权重
+                temp_positions(j) = round((alpha_weight * X1 + beta_weight * X2 + delta_weight * X3) / 3 * step_size);
+
             end
             
             % 确保位置在有效范围内
@@ -148,7 +155,7 @@ function [best_solution, best_directions, bestValues] = Optimized_GWO_function(S
     best_directions = alpha_dir;
     best_fitness = alpha_score;
     bestValues = best_fitness_values;
-    
+
     % 确保best_directions中的值是有效的索引
     best_directions = max(min(best_directions, length(directions)), 1);
 

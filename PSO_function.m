@@ -6,48 +6,41 @@ function [best_solution, best_directions, best_fitness_value] = PSO_function(N, 
     % 初始化装配方向矩阵 D
     directions = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"];
     D = directions(randi(length(directions), N, m)); % 随机初始化每个粒子的装配方向
+    
+    valid_population_found = false;
+    while ~valid_population_found
 
-    % 初始化粒子群的位置和速度
-    positions = zeros(N, m);
-    velocities = zeros(N, m);
-    for i = 1:N
-        positions(i, :) = randperm(m);
-        velocities(i, :) = randn(1, m);
-    end
-
-    % 初始化局部最优位置和全局最优位置
-    localBestPositions = positions;
-    localBestDirections = D;
-    localBestFitness = inf * ones(N, 1);
-    globalBestPosition = positions(1, :); % 初始化为第一个粒子的初始位置
-    globalBestDirections = D(1, :); % 初始化为第一个粒子的初始方向
-    globalBestFitness = inf;
-
-    % 计算初始适应值
-    for i = 1:N
-        fitness = fitness_function(positions(i, :), S, T, C, D(i, :), A_I_X, A_I_Y, A_I_Z);
-        localBestFitness(i) = fitness;
-        if fitness < globalBestFitness
-            globalBestFitness = fitness;
-            globalBestPosition = positions(i, :);
-            globalBestDirections = D(i, :);
-        end
-    end
-
-    % 如果初始化的适应度全为无穷大，则生成一个可行解
-    if isempty(globalBestPosition)
+        % 初始化粒子群的位置和速度
+        positions = zeros(N, m);
+        velocities = zeros(N, m);
         for i = 1:N
             positions(i, :) = randperm(m);
-            D(i, :) = directions(randi(length(directions), 1, m)); % 随机初始化装配方向
+            velocities(i, :) = randn(1, m);
+        end
+    
+        % 初始化局部最优位置和全局最优位置
+        localBestPositions = positions;
+        localBestDirections = D;
+        localBestFitness = inf * ones(N, 1);
+        globalBestPosition = positions(1, :); % 初始化为第一个粒子的初始位置
+        globalBestDirections = D(1, :); % 初始化为第一个粒子的初始方向
+        globalBestFitness = inf;
+    
+        % 计算初始适应值
+        for i = 1:N
             fitness = fitness_function(positions(i, :), S, T, C, D(i, :), A_I_X, A_I_Y, A_I_Z);
+            localBestFitness(i) = fitness;
             if fitness < globalBestFitness
                 globalBestFitness = fitness;
                 globalBestPosition = positions(i, :);
                 globalBestDirections = D(i, :);
-                break;
             end
         end
+        if globalBestFitness ~= inf 
+            valid_population_found = true;
+        end
     end
+
 
     % 迭代优化
     best_fitness_values = zeros(maxIter, 1);
@@ -109,7 +102,7 @@ function [best_solution, best_directions, best_fitness_value] = PSO_function(N, 
     best_fitness = globalBestFitness;
 
     % 计算最优解的具体指标
-    [N_g, N_t, N_d, N_s] = calculate_indicators(best_solution, S, T, C, best_directions, A_I_X, A_I_Y, A_I_Z);
+    [~, N_t, N_d, N_s] = calculate_indicators(best_solution, S, T, C, best_directions, A_I_X, A_I_Y, A_I_Z);
 
     fprintf('最优装配序列: ');
     disp(best_solution);

@@ -55,9 +55,9 @@ function O = fitness_function(Z_h, S, T, C, D, A_I_X, A_I_Y, A_I_Z)
         end
     end
 
-    omega_1 = 0.3; % 权重因子
-    omega_2 = 0.3; % 权重因子
-    omega_3 = 0.4; % 权重因子
+    omega_1 = 0.2; % 权重因子
+    omega_2 = 0.4; % 权重因子
+    omega_3 = 0.3; % 权重因子
     if N_g > 0
         O = inf; % 如果几何干涉次数大于0，适应度设为无穷大
     else

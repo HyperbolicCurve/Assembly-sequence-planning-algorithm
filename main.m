@@ -1,5 +1,5 @@
 % 种群数量
-N = 100;
+N = 100; 
 % 迭代次数
 maxIter = 300;
 
@@ -50,6 +50,15 @@ A_I_Z = readmatrix('干涉矩阵-Z.xlsx');
 % Optimized_GWO
 fprintf("Optimized GWO algorithm:\n")
 [opt_gwo_best_solution, opt_gwo_best_directions, opt_gwo_fitness_values] = Optimized_GWO_function(S, T, C, A_I_X, A_I_Y, A_I_Z, N, maxIter, aMax, minError_3);
+
+% Calculate N
+N_Matrix = CalculateN(pso_best_solution, ga_bestSequence, gwo_best_solution, opt_gwo_best_solution,  S, T, C, pso_best_directions, ga_bestDirections, gwo_best_directions, opt_gwo_best_directions);
+
+% 随机TOPSIS法，On
+[omega_1, omega_2, omega_3] = random_topsis(N_Matrix);
+disp(['omega_1: ', num2str(omega_1)]);
+disp(['omega_2: ', num2str(omega_2)]);
+disp(['omega_3: ', num2str(omega_3)]);
 
 % 绘制适应度变化图 (GWO, PSO, GA)
 figure;
